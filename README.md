@@ -4,5 +4,6 @@ The modifications is I'm using WIN32 api to create/read/write files instead of o
 Reason for this is that the only info I could find on accessing tape drives with c on windows was through the win32 api.
 
 This code is neither good or complete, but writing multiple files to a tar archive on tape works.
+Reading back a tar archive doesn't work yet, have another program for that.
 
-Next thing to implement is command line arguments and recursion
+Next thing to implement is command line arguments and recursion.
