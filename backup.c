@@ -131,7 +131,7 @@ int writetotape(HANDLE tapedrive) {
 
 int main(int argc, char* argv[]) {
 	
-
+	//testing tape
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE hfile = INVALID_HANDLE_VALUE;
 	HANDLE s_file1 = INVALID_HANDLE_VALUE;
