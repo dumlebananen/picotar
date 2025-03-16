@@ -106,6 +106,12 @@ int checkTapeDrive(HANDLE h_tape) {
 
 }
 
+HANDLE preparetapedrive() {
+	printf("Preparing tapoe drive\n");
+	HANDLE tapeDrive=CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	return tapeDrive;
+}
+
 
 int writetotape(HANDLE tapedrive) {
 
@@ -132,7 +138,8 @@ int writetotape(HANDLE tapedrive) {
 int main(int argc, char* argv[]) {
 	
 	//testing tape
-	HANDLE h_tape = INVALID_HANDLE_VALUE;
+	
+	HANDLE h_tape;
 	HANDLE hfile = INVALID_HANDLE_VALUE;
 	HANDLE s_file1 = INVALID_HANDLE_VALUE;
 	HANDLE s_file2 = INVALID_HANDLE_VALUE;
@@ -161,8 +168,37 @@ int main(int argc, char* argv[]) {
 	searchhandle = FindFirstFileA("c:\\temp\\test\\*", &findFileData);
 
 	hfile = CreateFileA("c:\\temp\\test3.tar", GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
+	h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	if (h_tape != INVALID_HANDLE_VALUE)
+	{
+		DWORD size, error;
+		printf("tape opened \nGetting tape info\n");
+		size = sizeof(drive);
+		error = GetTapeParameters(h_tape, GET_TAPE_DRIVE_INFORMATION, &size, &drive);
+		printf("Error: %d\n", error);
+
+		printf("Querying media information...\n");
+		size = sizeof(media);
+		error = GetTapeParameters(h_tape, GET_TAPE_MEDIA_INFORMATION, &size, &media);
+		if (error == 0) {
+			have_media_info = 1;
+			printf("Drive Max block size: %d\n", drive.MaximumBlockSize);
+			printf("Drive Min block size: %d\n", drive.MinimumBlockSize);
+			printf("Drive ECC status: %d\n", drive.ECC);
+			printf("Drive compression status: %d\n", drive.Compression);
+			printf("Drive default block size: %d\n", drive.DefaultBlockSize);
+			printf("Drive featureslow: %d\n", CHECK_BIT(drive.FeaturesLow, 2));
+		}
+		else if (error != ERROR_NO_MEDIA_IN_DRIVE) {
+			printf("Can't get media information:\n");
+			int success = 0;
+		}
+
+	}
+	SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
+	PrepareTape(h_tape, TAPE_LOAD, FALSE);
 	mtar_t tar;
-	mtar_open(&tar, hfile, "w");
+	mtar_open(&tar, h_tape, "w");
 	LPDWORD dwFileSizeHi=0;
 	DWORD dwFileSizeLo = 0;
 	LARGE_INTEGER lpFileSize;
@@ -200,64 +236,4 @@ int main(int argc, char* argv[]) {
 	return 0;
 
 
-	//if (argc > 1) {
-	//	if (strcmp(argv[1], "w") == 0) {
-	//		h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-	//		h_file = CreateFileA("c:\\temp\\test2.tar", GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
-	//		if (!checkTapeDrive(h_tape))
-	//		{
-	//			DWORD size, error;
-	//			printf("tape opened \nGetting tape info\n");
-	//			size = sizeof(drive);
-	//			error = GetTapeParameters(h_tape, GET_TAPE_DRIVE_INFORMATION, &size, &drive);
-	//			printf("Error: %d\n", error);
-
-	//			printf("Querying media information...\n");
-	//			size = sizeof(media);
-	//			error = GetTapeParameters(h_tape, GET_TAPE_MEDIA_INFORMATION, &size, &media);
-	//			if (error == 0) {
-	//				have_media_info = 1;
-	//				printf("Drive Max block size: %d\n", drive.MaximumBlockSize);
-	//				printf("Drive Min block size: %d\n", drive.MinimumBlockSize);
-	//				printf("Drive ECC status: %d\n", drive.ECC);
-	//				printf("Drive compression status: %d\n", drive.Compression);
-	//				//printf("Drive compression status: %d\n", drive.);
-	//				printf("Drive default block size: %d\n", drive.DefaultBlockSize);
-	//				printf("Drive featureslow: %d\n", CHECK_BIT(drive.FeaturesLow, 2));
-	//			}
-	//			else if (error != ERROR_NO_MEDIA_IN_DRIVE) {
-	//				printf("Can't get media information:\n");
-	//				int success = 0;
-	//			}
-
-	//		}
-	//		SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
-	//		dstatus = GetTapeStatus(h_tape);
-	//		error = PrepareTape(h_tape, TAPE_LOAD, FALSE);
-	//		dstatus = GetTapeStatus(h_tape);
-	//		writetotape(h_file);
-	//		exit(1);
-	//	}
-	//}
-
-	//LPWSTR szFileName = "c:\\temp\\test.tar";
-	//HANDLE src_file;
-	//src_file = CreateFileA(szFileName, GENERIC_READ | GENERIC_WRITE, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-	//mtar_t tar;
-	//mtar_header_t h;
-	//char* p;
-
-	///* Open archive for reading */
-	//mtar_open(&tar, src_file, "r");
-
-	///* Print all file names and sizes */
-	//while ((mtar_read_header(&tar, &h)) != MTAR_ENULLRECORD) {
-	//	printf("%s (%d bytes)\n", h.name, h.size);
-	//	mtar_next(&tar);
-	//}
-
-
-
-	///* Close archive */
-	//mtar_close(&tar);
 }
