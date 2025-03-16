@@ -130,8 +130,7 @@ int writetotape(HANDLE tapedrive) {
 }
 
 int main(int argc, char* argv[]) {
-	//const char* directoryPath = "C:\\temp\\*";
-	//ListFilesInDirectory(directoryPath);
+	
 
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE hfile = INVALID_HANDLE_VALUE;
