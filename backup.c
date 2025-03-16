@@ -56,24 +56,19 @@ int getnextfile(HANDLE searchhandle, const WIN32_FIND_DATAA *ffd) {
 	HANDLE hFind;
 	TCHAR szDir[MAX_PATH];
 	int err;
-	// Create the search path
-
+	
 	// Start searching for files
 	err=FindNextFileA(searchhandle, ffd);
 
 	if (ffd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				printf("Only files will be added, skipping directory:  %s\n", ffd->cFileName);
-				FindNextFileA(searchhandle, ffd);
+				printf("Only files will be added, skipping directory:  %s\n", ffd->cFileName); //skipping subdirs for now
+				FindNextFileA(searchhandle, ffd); //get next item, doen't handle several subfolders in a row yet.
 		}
 	
 	printf("Adding [FILE] %s\n", ffd->cFileName);
 	
-	
-	//printf("Result code :%d\n", err);
 	return err;
-	// Close the handle
-	// Close the handle
-	//FindClose(hFind);
+	
 }
 
 int checkTapeDrive(HANDLE h_tape) {
@@ -107,6 +102,7 @@ int checkTapeDrive(HANDLE h_tape) {
 }
 
 HANDLE preparetapedrive() {
+	//function not in use yet
 	printf("Preparing tapoe drive\n");
 	HANDLE tapeDrive=CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	return tapeDrive;
@@ -137,7 +133,7 @@ int writetotape(HANDLE tapedrive) {
 
 int main(int argc, char* argv[]) {
 	
-	//testing tape
+
 	
 	HANDLE h_tape;
 	HANDLE hfile = INVALID_HANDLE_VALUE;
@@ -145,11 +141,11 @@ int main(int argc, char* argv[]) {
 	HANDLE s_file2 = INVALID_HANDLE_VALUE;
 	HANDLE searchhandle;
 	WIN32_FIND_DATAA findFileData;
-	//WIN32_FIND_DATAA* ffdptr = &findFileData;
+
 
 	DWORD dwBytesRead = 0;
 	DWORD dwBytesWritten = 0;
-	//printf("File size: %d", dwFileSize);
+	
 	char ReadBuffer[16384] = { 0 };
 
 	unsigned int open_flags = 0;
@@ -162,9 +158,13 @@ int main(int argc, char* argv[]) {
 	TAPE_SET_MEDIA_PARAMETERS tsmp;
 	DWORD error;
 	DWORD dstatus;
-	tsmp.BlockSize = 0;
-	//printf("Argument passed: %s", argv[1]);
 
+	//Blocksize 0 means variable block size on the tape drive, make sure it supports it.
+	tsmp.BlockSize = 0;
+	
+
+
+	//define source directory, all files will be added to the tar archive, but no recursion yet.
 	searchhandle = FindFirstFileA("c:\\temp\\test\\*", &findFileData);
 
 	hfile = CreateFileA("c:\\temp\\test3.tar", GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
@@ -195,14 +195,19 @@ int main(int argc, char* argv[]) {
 		}
 
 	}
+
+	//setting block size to variable size(0), this was important if i remember correctly, otherwise it would fill out a whole tape block for the remaining bytes of the file.
 	SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
 	PrepareTape(h_tape, TAPE_LOAD, FALSE);
+	SetTapePosition(h_tape, TAPE_FILEMARKS, 0, 0, 0, TRUE);
 	mtar_t tar;
 	mtar_open(&tar, h_tape, "w");
 	LPDWORD dwFileSizeHi=0;
 	DWORD dwFileSizeLo = 0;
 	LARGE_INTEGER lpFileSize;
 	unsigned int size = 0;
+
+	//loop through directory 
 	while (getnextfile(searchhandle, &findFileData) != 0)
 	{
 		
@@ -222,16 +227,18 @@ int main(int argc, char* argv[]) {
 			mtar_write_data(&tar, ReadBuffer, dwBytesRead);
 			printf("bytes read; %d", dwBytesRead);
 		}
+		//close source file
 		CloseHandle(s_file1);
 		printf("Next \n");
 	}
 
-	/* Open archive for writing */
-	
 		
 	mtar_finalize(&tar);
 
+	//close the search HANDLE
+	CloseHandle(searchhandle);
 	
+	//closing the h_tape HANDLE in tar->stream
 	mtar_close(&tar);
 	return 0;
 
