@@ -116,6 +116,46 @@ int getnextfile(HANDLE *searchhandle, const WIN32_FIND_DATAA *ffd) {
 	
 }
 
+int preptape(HANDLE h_tape) {
+	TAPE_GET_DRIVE_PARAMETERS drive;
+	TAPE_GET_MEDIA_PARAMETERS media;
+	int have_drive_info = 0;
+	int have_media_info = 0;
+	TAPE_SET_MEDIA_PARAMETERS tsmp;
+	tsmp.BlockSize = 0;
+	if (h_tape != INVALID_HANDLE_VALUE)
+	{
+		DWORD size, error;
+		printf("tape opened \nGetting tape info\n");
+		size = sizeof(drive);
+		error = GetTapeParameters(h_tape, GET_TAPE_DRIVE_INFORMATION, &size, &drive);
+		printf("Error: %d\n", error);
+
+		printf("Querying media information...\n");
+		size = sizeof(media);
+		error = GetTapeParameters(h_tape, GET_TAPE_MEDIA_INFORMATION, &size, &media);
+		if (error == 0) {
+			have_media_info = 1;
+			printf("Drive Max block size: %d\n", drive.MaximumBlockSize);
+			printf("Drive Min block size: %d\n", drive.MinimumBlockSize);
+			printf("Drive ECC status: %d\n", drive.ECC);
+			printf("Drive compression status: %d\n", drive.Compression);
+			printf("Drive default block size: %d\n", drive.DefaultBlockSize);
+			printf("Drive featureslow: %d\n", CHECK_BIT(drive.FeaturesLow, 2));
+			//setting block size to variable size(0), this was important if i remember correctly, otherwise it would fill out a whole tape block for the remaining bytes of the file.
+			SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
+			PrepareTape(h_tape, TAPE_LOAD, FALSE);
+			SetTapePosition(h_tape, TAPE_FILEMARKS, 0, 0, 0, TRUE);
+		}
+		else if (error != ERROR_NO_MEDIA_IN_DRIVE) {
+			printf("Can't get media information:\n");
+			int success = 0;
+		}
+
+	}
+
+}
+
 int checkTapeDrive(HANDLE h_tape) {
 	/* Check for errors */
 	if (h_tape == INVALID_HANDLE_VALUE)
@@ -149,76 +189,73 @@ int checkTapeDrive(HANDLE h_tape) {
 
 }
 
-//HANDLE preparetapedrive() {
-//	//function not in use yet
-//	printf("Preparing tapoe drive\n");
-//	HANDLE tapeDrive=CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-//	return tapeDrive;
-//}
 
 
-int writetotape(HANDLE tapedrive) {
-
-	mtar_t tar;
-	const char* str1 = "Hello world";
-	const char* str2 = "Goodbye world";
-	/* Open archive for writing */
-	mtar_open(&tar, tapedrive, "w");
-
-	/* Write strings to files `test1.txt` and `test2.txt` */
-	mtar_write_file_header(&tar, "test1.txt", strlen(str1));
-	mtar_write_data(&tar, str1, strlen(str1));
-	mtar_write_file_header(&tar, "test2.txt", strlen(str2));
-	mtar_write_data(&tar, str2, strlen(str2));
-
-	/* Finalize -- this needs to be the last thing done before closing */
-	mtar_finalize(&tar);
-
-	/* Close archive */
-	mtar_close(&tar);
-	return 0;
-}
 
 int main(int argc, char* argv[]) {
 	
 
 	
-	
+	mtar_t tar;
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE s_file1 = INVALID_HANDLE_VALUE;
-	HANDLE s_file2 = INVALID_HANDLE_VALUE;
+	HANDLE h_file = INVALID_HANDLE_VALUE;
 	HANDLE searchhandle;
 	WIN32_FIND_DATAA findFileData;
 	char *escaped_path = NULL;
 
-
+	LPDWORD dwFileSizeHi = 0;
+	DWORD dwFileSizeLo = 0;
+	LARGE_INTEGER lpFileSize;
+	unsigned int size = 0;
 	DWORD dwBytesRead = 0;
 	DWORD dwBytesWritten = 0;
 	
 	char ReadBuffer[16384] = { 0 };
 
 	unsigned int open_flags = 0;
-	TAPE_GET_DRIVE_PARAMETERS drive;
-	TAPE_GET_MEDIA_PARAMETERS media;
-	int have_drive_info = 0;
-	int have_media_info = 0;
-	
 
-	TAPE_SET_MEDIA_PARAMETERS tsmp;
+
 	DWORD error;
 	DWORD dstatus;
 
 	//Blocksize 0 means variable block size on the tape drive, make sure it supports it.
-	tsmp.BlockSize = 0;
 	
-	h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-	checkTapeDrive(h_tape);
+	
+	//h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	//h_file = CreateFileA("c:\\temp\\testing.tar", GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, NULL);
+	
 	const char* command = argv[1];
 	const char* src_path = argv[2];
+	if (strcmp(command, "tapebackup") == 0) {
+		if (argc != 3) {
+			printf("Usage: %s tapebackup <source_file>\n", argv[0]);
+			
+			return 1;
+		}
+		else {
+			h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+			error = checkTapeDrive(h_tape);
+			if (error != 0) {
+				printf("Tape error: %d ", error);
+				return 1;
+			}
+			else {
+				preptape(h_tape);
+				mtar_open(&tar, h_tape, "w");
+			}
+		}
+	}
+
+
 	if (strcmp(command, "backup") == 0) {
 		if (argc != 3) {
 			printf("Usage: %s backup <source_file>\n", argv[0]);
 			return 1;
+		}
+		else {
+			h_file = CreateFileA("c:\\temp\\testing.tar", GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, NULL);
+			mtar_open(&tar, h_file, "w");
 		}
 	}
 		
@@ -232,55 +269,35 @@ int main(int argc, char* argv[]) {
 	
 	//define source directory, all files will be added to the tar archive, but no recursion yet.
 	//searchhandle = FindFirstFileA("c:\\temp\\test\\*", &findFileData);
-	searchhandle = FindFirstFileA(fixedpath, &findFileData);
+	
 	//h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-	if (h_tape != INVALID_HANDLE_VALUE)
-	{
-		DWORD size, error;
-		printf("tape opened \nGetting tape info\n");
-		size = sizeof(drive);
-		error = GetTapeParameters(h_tape, GET_TAPE_DRIVE_INFORMATION, &size, &drive);
-		printf("Error: %d\n", error);
+	
+	
 
-		printf("Querying media information...\n");
-		size = sizeof(media);
-		error = GetTapeParameters(h_tape, GET_TAPE_MEDIA_INFORMATION, &size, &media);
-		if (error == 0) {
-			have_media_info = 1;
-			printf("Drive Max block size: %d\n", drive.MaximumBlockSize);
-			printf("Drive Min block size: %d\n", drive.MinimumBlockSize);
-			printf("Drive ECC status: %d\n", drive.ECC);
-			printf("Drive compression status: %d\n", drive.Compression);
-			printf("Drive default block size: %d\n", drive.DefaultBlockSize);
-			printf("Drive featureslow: %d\n", CHECK_BIT(drive.FeaturesLow, 2));
-		}
-		else if (error != ERROR_NO_MEDIA_IN_DRIVE) {
-			printf("Can't get media information:\n");
-			int success = 0;
-		}
+	
+	
+
+
+	searchhandle = FindFirstFileA(fixedpath, &findFileData);
+
+	if (findFileData.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) {
 
 	}
-
-	//setting block size to variable size(0), this was important if i remember correctly, otherwise it would fill out a whole tape block for the remaining bytes of the file.
-	SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
-	PrepareTape(h_tape, TAPE_LOAD, FALSE);
-	SetTapePosition(h_tape, TAPE_FILEMARKS, 0, 0, 0, TRUE);
-	mtar_t tar;
-	mtar_open(&tar, h_tape, "w");
-	LPDWORD dwFileSizeHi=0;
-	DWORD dwFileSizeLo = 0;
-	LARGE_INTEGER lpFileSize;
-	unsigned int size = 0;
-
 	//loop through directory 
-	while (getnextfile(searchhandle, &findFileData) != 0)
-	{
+	//while (getnextfile(searchhandle, &findFileData) != 0)
+	//{
 		
 		printf("filename: %s\n", &findFileData.cFileName);
-		char* filename = (char*)malloc(strlen(&findFileData.cFileName) + strlen("c:\\temp\\test\\"));
-		sprintf(filename, "c:\\temp\\test\\%s", &findFileData.cFileName);
-		s_file1=CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-		printf("Result from opening %s :%d\n", filename, GetLastError());
+		//char* filename = (char*)malloc(strlen(&findFileData.cFileName) + strlen(fixedpath));
+		//sprintf(filename, "%s%s",fixedpath, &findFileData.cFileName);
+		
+		//to tape
+		//s_file1=CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		//printf("Result from opening %s :%d\n", filename, GetLastError());
+	
+		//to file
+		s_file1 = CreateFileA(fixedpath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+		printf("Result from opening %s :%d\n", fixedpath, GetLastError());
 		size = (unsigned int)GetFileSize(s_file1, dwFileSizeHi);
 		//Write filename, filesize and a few other things to the tar header
 		mtar_write_file_header(&tar, &findFileData.cFileName, size);
@@ -290,12 +307,12 @@ int main(int argc, char* argv[]) {
 				break;
 			}
 			mtar_write_data(&tar, ReadBuffer, dwBytesRead);
-			printf("bytes read; %d", dwBytesRead);
+			//printf("bytes read; %d", dwBytesRead);
 		}
 		//close source file
 		CloseHandle(s_file1);
 		printf("Next \n");
-	}
+	/*}*/
 
 		
 	mtar_finalize(&tar);
