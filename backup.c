@@ -54,7 +54,6 @@ char* escape_windows_filepath(const char* filepath) {
 	return escaped;
 }
 
-
 void ListFilesInDirectory(const char* directoryPath) {
 	WIN32_FIND_DATAA findFileData;
 	HANDLE hFind;
@@ -189,9 +188,6 @@ int checkTapeDrive(HANDLE h_tape) {
 
 }
 
-
-
-
 int main(int argc, char* argv[]) {
 	
 
@@ -249,12 +245,13 @@ int main(int argc, char* argv[]) {
 
 
 	if (strcmp(command, "backup") == 0) {
-		if (argc != 3) {
-			printf("Usage: %s backup <source_file>\n", argv[0]);
+		if (argc != 4) {
+			printf("Usage: %s backup <source_file> <destination_tar>\n", argv[0]);
 			return 1;
 		}
 		else {
-			h_file = CreateFileA("c:\\temp\\testing.tar", GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, NULL);
+			const char* dest_path = escape_windows_filepath(argv[3]);
+			h_file = CreateFileA(dest_path, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, NULL);
 			mtar_open(&tar, h_file, "w");
 		}
 	}
