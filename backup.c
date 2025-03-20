@@ -8,6 +8,51 @@
 #undef UNICODE
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
+// Function to escape a Windows file path
+char* escape_windows_filepath(const char* filepath) {
+	// Calculate the length of the escaped string
+	size_t length = 0;
+	for (const char* p = filepath; *p; ++p) {
+		if (*p == '\\' || *p == '\"' || *p == '\'') {
+			length += 2; // Escape character and the character itself
+		}
+		else {
+			length += 1; // Normal character
+		}
+	}
+
+	// Allocate memory for the escaped string
+	char* escaped = (char*)malloc(length + 1); // +1 for null terminator
+	if (!escaped) {
+		fprintf(stderr, "Memory allocation failed.\n");
+		return NULL;
+	}
+
+	// Fill the escaped string
+	const char* src = filepath;
+	char* dest = escaped;
+	while (*src) {
+		if (*src == '\\') {
+			*dest++ = '\\';
+			*dest++ = '\\';
+		}
+		else if (*src == '\"') {
+			*dest++ = '\\';
+			*dest++ = '\"';
+		}
+		else if (*src == '\'') {
+			*dest++ = '\\';
+			*dest++ = '\'';
+		}
+		else {
+			*dest++ = *src;
+		}
+		src++;
+	}
+
+	*dest = '\0'; // Null terminate the escaped string
+	return escaped;
+}
 
 
 void ListFilesInDirectory(const char* directoryPath) {
@@ -51,14 +96,14 @@ void ListFilesInDirectory(const char* directoryPath) {
 	FindClose(hFind);
 }
 
-int getnextfile(HANDLE searchhandle, const WIN32_FIND_DATAA *ffd) {
+int getnextfile(HANDLE *searchhandle, const WIN32_FIND_DATAA *ffd) {
 	//WIN32_FIND_DATAA findFileData;
-	HANDLE hFind;
+	HANDLE hFind = searchhandle;
 	TCHAR szDir[MAX_PATH];
 	int err;
 	
 	// Start searching for files
-	err=FindNextFileA(searchhandle, ffd);
+ 	err=FindNextFileA(searchhandle, ffd);
 
 	if (ffd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 				printf("Only files will be added, skipping directory:  %s\n", ffd->cFileName); //skipping subdirs for now
@@ -97,16 +142,19 @@ int checkTapeDrive(HANDLE h_tape) {
 		}
 
 	}
+	else {
+		printf("Tape drive found!\n");
+	}
 	return 0;
 
 }
 
-HANDLE preparetapedrive() {
-	//function not in use yet
-	printf("Preparing tapoe drive\n");
-	HANDLE tapeDrive=CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-	return tapeDrive;
-}
+//HANDLE preparetapedrive() {
+//	//function not in use yet
+//	printf("Preparing tapoe drive\n");
+//	HANDLE tapeDrive=CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+//	return tapeDrive;
+//}
 
 
 int writetotape(HANDLE tapedrive) {
@@ -135,12 +183,13 @@ int main(int argc, char* argv[]) {
 	
 
 	
-	HANDLE h_tape;
-	HANDLE hfile = INVALID_HANDLE_VALUE;
+	
+	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE s_file1 = INVALID_HANDLE_VALUE;
 	HANDLE s_file2 = INVALID_HANDLE_VALUE;
 	HANDLE searchhandle;
 	WIN32_FIND_DATAA findFileData;
+	char *escaped_path = NULL;
 
 
 	DWORD dwBytesRead = 0;
@@ -162,13 +211,29 @@ int main(int argc, char* argv[]) {
 	//Blocksize 0 means variable block size on the tape drive, make sure it supports it.
 	tsmp.BlockSize = 0;
 	
-
-
-	//define source directory, all files will be added to the tar archive, but no recursion yet.
-	searchhandle = FindFirstFileA("c:\\temp\\test\\*", &findFileData);
-
-	hfile = CreateFileA("c:\\temp\\test3.tar", GENERIC_READ | GENERIC_WRITE, 0, NULL, CREATE_ALWAYS, 0, NULL);
 	h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+	checkTapeDrive(h_tape);
+	const char* command = argv[1];
+	const char* src_path = argv[2];
+	if (strcmp(command, "backup") == 0) {
+		if (argc != 3) {
+			printf("Usage: %s backup <source_file>\n", argv[0]);
+			return 1;
+		}
+	}
+		
+	char* fixedpath = escape_windows_filepath(src_path);
+	printf("Escaped path: %s", fixedpath);
+	//escaped_path = &fixedpath;
+	//searchhandle = FindFirstFileA(fixedpath, &findFileData);
+	//printf("reurned path: %s\n", *escaped_path);
+	
+	
+	
+	//define source directory, all files will be added to the tar archive, but no recursion yet.
+	//searchhandle = FindFirstFileA("c:\\temp\\test\\*", &findFileData);
+	searchhandle = FindFirstFileA(fixedpath, &findFileData);
+	//h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	if (h_tape != INVALID_HANDLE_VALUE)
 	{
 		DWORD size, error;
@@ -236,7 +301,8 @@ int main(int argc, char* argv[]) {
 	mtar_finalize(&tar);
 
 	//close the search HANDLE
-	CloseHandle(searchhandle);
+	FindClose(searchhandle);
+
 	
 	//closing the h_tape HANDLE in tar->stream
 	mtar_close(&tar);
