@@ -119,7 +119,7 @@ void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
 			//close source file
 			CloseHandle(s_file1);
 		}
-	}
+
 }
 // Function to escape a Windows file path
 char* escape_windows_filepath(const char* filepath) {
@@ -134,76 +134,6 @@ char* escape_windows_filepath(const char* filepath) {
 		}
 	}
 
-	// Allocate memory for the escaped string
-	char* escaped = (char*)malloc(length + 1); // +1 for null terminator
-	if (!escaped) {
-		fprintf(stderr, "Memory allocation failed.\n");
-		return NULL;
-	}
-
-	// Fill the escaped string
-	const char* src = filepath;
-	char* dest = escaped;
-	while (*src) {
-		if (*src == '\\') {
-			*dest++ = '\\';
-			*dest++ = '\\';
-		}
-		else if (*src == '\"') {
-			*dest++ = '\\';
-			*dest++ = '\"';
-		}
-		else if (*src == '\'') {
-			*dest++ = '\\';
-			*dest++ = '\'';
-		}
-		else {
-			*dest++ = *src;
-		}
-		src++;
-	}
-
-	*dest = '\0'; // Null terminate the escaped string
-	return escaped;
-}
-
-int preptape(HANDLE h_tape) {
-	TAPE_GET_DRIVE_PARAMETERS drive;
-	TAPE_GET_MEDIA_PARAMETERS media;
-	int have_drive_info = 0;
-	int have_media_info = 0;
-	TAPE_SET_MEDIA_PARAMETERS tsmp;
-	tsmp.BlockSize = 0;
-	if (h_tape != INVALID_HANDLE_VALUE)
-	{
-		DWORD size, error;
-		printf("tape opened \nGetting tape info\n");
-		size = sizeof(drive);
-		error = GetTapeParameters(h_tape, GET_TAPE_DRIVE_INFORMATION, &size, &drive);
-		printf("Error: %d\n", error);
-
-		printf("Querying media information...\n");
-		size = sizeof(media);
-		error = GetTapeParameters(h_tape, GET_TAPE_MEDIA_INFORMATION, &size, &media);
-		if (error == 0) {
-			have_media_info = 1;
-			printf("Drive Max block size: %d\n", drive.MaximumBlockSize);
-			printf("Drive Min block size: %d\n", drive.MinimumBlockSize);
-			printf("Drive ECC status: %d\n", drive.ECC);
-			printf("Drive compression status: %d\n", drive.Compression);
-			printf("Drive default block size: %d\n", drive.DefaultBlockSize);
-			printf("Drive featureslow: %d\n", CHECK_BIT(drive.FeaturesLow, 2));
-			//setting block size to variable size(0), this was important if i remember correctly, otherwise it would fill out a whole tape block for the remaining bytes of the file.
-			SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
-			PrepareTape(h_tape, TAPE_LOAD, FALSE);
-			SetTapePosition(h_tape, TAPE_FILEMARKS, 0, 0, 0, TRUE);
-		}
-		else if (error != ERROR_NO_MEDIA_IN_DRIVE) {
-			printf("Can't get media information:\n");
-			int success = 0;
-		}
-
-	}
 
 }
 
