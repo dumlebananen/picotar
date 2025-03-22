@@ -6,19 +6,19 @@
 #include <wchar.h>
 
 #define _CRT_SECURE_NO_WARNINGS
-#undef _UNICODE
-#undef UNICODE
+//#undef _UNICODE
+//#undef UNICODE
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
 
 typedef struct {
 	HANDLE hFind;
-	WIN32_FIND_DATAA findFileData;
-	char folderPath[MAX_PATH];
+	WIN32_FIND_DATA findFileData;
+	TCHAR folderPath[MAX_PATH];
 	int initialized;
 } FileIterator;
 
-char* ConvertToUnixPath(char* winpath, char* unixpath) {
+wchar_t* ConvertToUnixPath(wchar_t* winpath, wchar_t* unixpath) {
 	if (winpath == NULL) {
 		return NULL; // Handle null input
 	}
@@ -42,10 +42,10 @@ char* ConvertToUnixPath(char* winpath, char* unixpath) {
 int GetNextFileOrFolder(FileIterator* iterator) {
 	// Initialize the search if it's the first call
 	if (!iterator->initialized) {
-		char searchPath[MAX_PATH];
-		snprintf(searchPath, MAX_PATH, "%s\\*", iterator->folderPath);
+		wchar_t searchPath[MAX_PATH];
+		swprintf(searchPath, MAX_PATH, "%s\\*", iterator->folderPath);
 
-		iterator->hFind = FindFirstFileA(searchPath, &iterator->findFileData);
+		iterator->hFind = FindFirstFile(searchPath, &iterator->findFileData);
 		if (iterator->hFind == INVALID_HANDLE_VALUE) {
 			return 0; // No files found
 		}
@@ -54,7 +54,7 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 	}
 
 	// Continue to the next file/folder
-	if (FindNextFileA(iterator->hFind, &iterator->findFileData)) {
+	if (FindNextFile(iterator->hFind, &iterator->findFileData)) {
 		return 1; // Found the next file/folder
 	}
 
@@ -64,7 +64,7 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 	return 0;
 }
 
-int ProcessFilesAndFolders(const char* startPath, mtar_t* tar) {
+int ProcessFilesAndFolders(const wchar_t* startPath, mtar_t* tar) {
 	LPDWORD dwFileSizeHi = 0;
 	DWORD dwFileSizeLo = 0;
 	LARGE_INTEGER lpFileSize;
@@ -75,9 +75,9 @@ int ProcessFilesAndFolders(const char* startPath, mtar_t* tar) {
 	char ReadBuffer[16384] = { 0 };
 	unsigned int open_flags = 0;
 	FileIterator iterator = { 0 };
-	char unixpath[MAX_PATH];
-	char fullPath[MAX_PATH];
-	snprintf(iterator.folderPath, MAX_PATH, "%s", startPath);
+	wchar_t unixpath[MAX_PATH];
+	wchar_t fullPath[MAX_PATH];
+	swprintf(iterator.folderPath, MAX_PATH, "%s", startPath);
 
 	while (GetNextFileOrFolder(&iterator)) {
 
@@ -87,7 +87,7 @@ int ProcessFilesAndFolders(const char* startPath, mtar_t* tar) {
 			continue;
 		}
 
-		snprintf(fullPath, MAX_PATH, "%s\\%s", startPath, iterator.findFileData.cFileName);
+		swprintf(fullPath, MAX_PATH, "%s\\%s", startPath, iterator.findFileData.cFileName);
 		ConvertToUnixPath(fullPath, unixpath);
 
 		if (iterator.findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
@@ -123,10 +123,10 @@ int ProcessFilesAndFolders(const char* startPath, mtar_t* tar) {
 	}
 }
 // Function to escape a Windows file path
-char* escape_windows_filepath(const char* filepath) {
+wchar_t* escape_windows_filepath(const wchar_t* filepath) {
 	// Calculate the length of the escaped string
 	size_t length = 0;
-	for (const char* p = filepath; *p; ++p) {
+	for (const wchar_t* p = filepath; *p; ++p) {
 		if (*p == '\\' || *p == '\"' || *p == '\'') {
 			length += 2; // Escape character and the character itself
 		}
@@ -136,15 +136,15 @@ char* escape_windows_filepath(const char* filepath) {
 	}
 
 	// Allocate memory for the escaped string
-	char* escaped = (char*)malloc(length + 1); // +1 for null terminator
+	wchar_t* escaped = (wchar_t*)malloc(length + 1); // +1 for null terminator
 	if (!escaped) {
 		fprintf(stderr, "Memory allocation failed.\n");
 		return NULL;
 	}
 
 	// Fill the escaped string
-	const char* src = filepath;
-	char* dest = escaped;
+	const wchar_t* src = filepath;
+	wchar_t* dest = escaped;
 	while (*src) {
 		if (*src == '\\') {
 			*dest++ = '\\';
@@ -242,20 +242,20 @@ int checkTapeDrive(HANDLE h_tape) {
 
 }
 
-int main(int argc, char* argv[]) {
+int _tmain(int argc, TCHAR **argv) {
 
 	mtar_t tar;
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE h_file = INVALID_HANDLE_VALUE;
 	HANDLE searchhandle;
-	WIN32_FIND_DATAA findFileData;
-	char* escaped_path = NULL;
+	WIN32_FIND_DATA findFileData;
+	wchar_t* escaped_path = NULL;
 	DWORD error;
 	DWORD dstatus;
 
-	const char* command = argv[1];
-	const char* src_path = argv[2];
-	if (strcmp(command, "tapebackup") == 0) {
+	const wchar_t* command = argv[1];
+	const wchar_t* src_path = argv[2];
+	if (wcscmp(command, L"tapebackup") == 0) {
 		if (argc != 3) {
 			printf("Usage: %s tapebackup <source_file>\n", argv[0]);
 
@@ -276,19 +276,19 @@ int main(int argc, char* argv[]) {
 	}
 
 
-	if (strcmp(command, "backup") == 0) {
+	if (wcscmp(command, L"backup") == 0) {
 		if (argc != 4) {
 			printf("Usage: %s backup <source_file> <destination_tar>\n", argv[0]);
 			return 1;
 		}
 		else {
-			const char* dest_path = escape_windows_filepath(argv[3]);
-			h_file = CreateFileA(dest_path, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, NULL);
+			const wchar_t* dest_path = escape_windows_filepath(argv[3]);
+			h_file = CreateFileW(dest_path, GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, NULL);
 			mtar_open(&tar, h_file, "w");
 		}
 	}
 
-	char* fixedpath = escape_windows_filepath(src_path);
+	wchar_t* fixedpath = escape_windows_filepath(src_path);
 	printf("Escaped path: %s", fixedpath);
 	ProcessFilesAndFolders(src_path, &tar);
 
