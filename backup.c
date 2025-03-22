@@ -168,7 +168,7 @@ char* escape_windows_filepath(const char* filepath) {
 	return escaped;
 }
 
-static int preptape(HANDLE h_tape) {
+int preptape(HANDLE h_tape) {
 	TAPE_GET_DRIVE_PARAMETERS drive;
 	TAPE_GET_MEDIA_PARAMETERS media;
 	int have_drive_info = 0;
