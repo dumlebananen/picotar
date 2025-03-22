@@ -205,10 +205,10 @@ int preptape(HANDLE h_tape) {
 			int success = 0;
 		}
 
-
 	}
-
 }
+
+
 int checkTapeDrive(HANDLE h_tape) {
 	/* Check for errors */
 	if (h_tape == INVALID_HANDLE_VALUE)
