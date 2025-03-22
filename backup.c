@@ -18,12 +18,12 @@ typedef struct {
 	int initialized;
 } FileIterator;
 
-char *ConvertToUnixPath(char *winpath, char *unixpath) {
+char* ConvertToUnixPath(char* winpath, char* unixpath) {
 	if (winpath == NULL) {
 		return NULL; // Handle null input
 	}
 	size_t length = strlen(winpath);
-	
+
 
 	// Convert backslashes to forward slashes
 	for (size_t i = 0; i < length; i++) {
@@ -243,13 +243,13 @@ int checkTapeDrive(HANDLE h_tape) {
 }
 
 int main(int argc, char* argv[]) {
-	
+
 	mtar_t tar;
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE h_file = INVALID_HANDLE_VALUE;
 	HANDLE searchhandle;
 	WIN32_FIND_DATAA findFileData;
-	char *escaped_path = NULL;
+	char* escaped_path = NULL;
 	DWORD error;
 	DWORD dstatus;
 
@@ -258,7 +258,7 @@ int main(int argc, char* argv[]) {
 	if (strcmp(command, "tapebackup") == 0) {
 		if (argc != 3) {
 			printf("Usage: %s tapebackup <source_file>\n", argv[0]);
-			
+
 			return 1;
 		}
 		else {
@@ -287,16 +287,16 @@ int main(int argc, char* argv[]) {
 			mtar_open(&tar, h_file, "w");
 		}
 	}
-		
+
 	char* fixedpath = escape_windows_filepath(src_path);
 	printf("Escaped path: %s", fixedpath);
 	ProcessFilesAndFolders(src_path, &tar);
 
 	mtar_finalize(&tar);
-		
+
 	//closing the h_tape HANDLE in tar->stream
 	mtar_close(&tar);
 	return 0;
-
-
 }
+
+
