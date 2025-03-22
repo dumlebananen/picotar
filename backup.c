@@ -134,93 +134,37 @@ char* escape_windows_filepath(const char* filepath) {
 		}
 	}
 
-typedef struct {
-	HANDLE hFind;
-	WIN32_FIND_DATAA findFileData;
-	char folderPath[MAX_PATH];
-	int initialized;
-} FileIterator;
-
-char *ConvertToUnixPath(char *winpath, char *unixpath) {
-	if (winpath == NULL) {
-		return NULL; // Handle null input
+	// Allocate memory for the escaped string
+	char* escaped = (char*)malloc(length + 1); // +1 for null terminator
+	if (!escaped) {
+		fprintf(stderr, "Memory allocation failed.\n");
+		return NULL;
 	}
-	size_t length = strlen(winpath);
-	
 
-	// Convert backslashes to forward slashes
-	for (size_t i = 0; i < length; i++) {
-		if (winpath[i] == '\\') {
-			unixpath[i] = '/';
+	// Fill the escaped string
+	const char* src = filepath;
+	char* dest = escaped;
+	while (*src) {
+		if (*src == '\\') {
+			*dest++ = '\\';
+			*dest++ = '\\';
+		}
+		else if (*src == '\"') {
+			*dest++ = '\\';
+			*dest++ = '\"';
+		}
+		else if (*src == '\'') {
+			*dest++ = '\\';
+			*dest++ = '\'';
 		}
 		else {
-			unixpath[i] = winpath[i];
+			*dest++ = *src;
 		}
-	}
-	unixpath[length] = '\0'; // Null-terminate the string
-
-	return unixpath;
-}
-
-void ListFilesInDirectory(const char* directoryPath) {
-	WIN32_FIND_DATAA findFileData;
-	HANDLE hFind;
-	TCHAR szDir[MAX_PATH];
-	// Create the search path
-
-	StringCchCopy(szDir, MAX_PATH, directoryPath);
-	StringCchCat(szDir, MAX_PATH, TEXT("\\*"));
-
-	// Start searching for files
-	hFind = FindFirstFileA(directoryPath, &findFileData);
-
-	if (hFind == INVALID_HANDLE_VALUE) {
-		printf("Error: Unable to open directory %s. Error code: %d\n", directoryPath, GetLastError());
-		return;
+		src++;
 	}
 
-	printf("Files in directory '%s':\n", directoryPath);
-
-	do {
-		// Skip "." and ".." entries
-		if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0) {
-			if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				printf("[DIR]  %s\n", findFileData.cFileName);
-			}
-			else {
-				printf("[FILE] %s\n", findFileData.cFileName);
-			}
-		}
-	} while (FindNextFileA(hFind, &findFileData) != 0);
-
-	// Check for errors during the FindNextFile loop
-	if (GetLastError() != ERROR_NO_MORE_FILES) {
-		printf("Error occurred while listing files. Error code: %d\n", GetLastError());
-	}
-
-	// Close the handle
-	// Close the handle
-	FindClose(hFind);
-}
-
-int getnextfile(HANDLE *searchhandle, const WIN32_FIND_DATAA *ffd) {
-	//WIN32_FIND_DATAA findFileData;
-	HANDLE hFind = searchhandle;
-	TCHAR szDir[MAX_PATH];
-	int err;
-	
-	// Start searching for files
- 	err=FindNextFileA(searchhandle, ffd);
-
-	if (ffd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				printf("Only files will be added, skipping directory:  %s\n", ffd->cFileName); //skipping subdirs for now
-				FindNextFileA(searchhandle, ffd); //get next item, doen't handle several subfolders in a row yet.
-		}
-	
-	printf("Adding [FILE] %s\n", ffd->cFileName);
-	
-	return err;
-	
+	*dest = '\0'; // Null terminate the escaped string
+	return escaped;
 }
 
 int preptape(HANDLE h_tape) {
@@ -249,13 +193,18 @@ int preptape(HANDLE h_tape) {
 			printf("Drive compression status: %d\n", drive.Compression);
 			printf("Drive default block size: %d\n", drive.DefaultBlockSize);
 			printf("Drive featureslow: %d\n", CHECK_BIT(drive.FeaturesLow, 2));
-			//setting block size to variable size(0), this was important if i remember correctly, otherwise it would fill out a whole tape block for the remaining bytes of the file.
+			//setting block size to variable size(0), this was important if i remember correctly, 
+			// otherwise it would fill out a whole tape block for the remaining bytes of the file.
 			SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
 			PrepareTape(h_tape, TAPE_LOAD, FALSE);
 			SetTapePosition(h_tape, TAPE_FILEMARKS, 0, 0, 0, TRUE);
 		}
-	}
+		else if (error != ERROR_NO_MEDIA_IN_DRIVE) {
+			printf("Can't get media information:\n");
+			int success = 0;
+		}
 
+	}
 
 }
 
@@ -293,28 +242,13 @@ int checkTapeDrive(HANDLE h_tape) {
 }
 
 int main(int argc, char* argv[]) {
-	
 
-	
 	mtar_t tar;
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE h_file = INVALID_HANDLE_VALUE;
 	HANDLE searchhandle;
 	WIN32_FIND_DATAA findFileData;
-	char *escaped_path = NULL;
-
-	LPDWORD dwFileSizeHi = 0;
-	DWORD dwFileSizeLo = 0;
-	LARGE_INTEGER lpFileSize;
-	unsigned int size = 0;
-	DWORD dwBytesRead = 0;
-	DWORD dwBytesWritten = 0;
-	
-	char ReadBuffer[16384] = { 0 };
-
-	unsigned int open_flags = 0;
-
-
+	char* escaped_path = NULL;
 	DWORD error;
 	DWORD dstatus;
 
@@ -359,10 +293,6 @@ int main(int argc, char* argv[]) {
 
 	mtar_finalize(&tar);
 
-	//close the search HANDLE
-	FindClose(searchhandle);
-
-	
 	//closing the h_tape HANDLE in tar->stream
 	mtar_close(&tar);
 	return 0;
