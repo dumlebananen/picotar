@@ -3,15 +3,17 @@
 #include <tchar.h> 
 #include <stdio.h>
 #include <strsafe.h>
+#include <wchar.h>
 
 #define _CRT_SECURE_NO_WARNINGS
+#undef _UNICODE
 #undef UNICODE
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
 
 typedef struct {
 	HANDLE hFind;
-	WIN32_FIND_DATA findFileData;
+	WIN32_FIND_DATAA findFileData;
 	char folderPath[MAX_PATH];
 	int initialized;
 } FileIterator;
@@ -22,7 +24,7 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 		char searchPath[MAX_PATH];
 		snprintf(searchPath, MAX_PATH, "%s\\*", iterator->folderPath);
 
-		iterator->hFind = FindFirstFile(searchPath, &iterator->findFileData);
+		iterator->hFind = FindFirstFileA(searchPath, &iterator->findFileData);
 		if (iterator->hFind == INVALID_HANDLE_VALUE) {
 			return 0; // No files found
 		}
@@ -31,7 +33,7 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 	}
 
 	// Continue to the next file/folder
-	if (FindNextFile(iterator->hFind, &iterator->findFileData)) {
+	if (FindNextFileA(iterator->hFind, &iterator->findFileData)) {
 		return 1; // Found the next file/folder
 	}
 
@@ -41,11 +43,21 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 	return 0;
 }
 
-void ProcessFilesAndFolders(const char* startPath) {
+void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
+	LPDWORD dwFileSizeHi = 0;
+	DWORD dwFileSizeLo = 0;
+	LARGE_INTEGER lpFileSize;
+	unsigned int size = 0;
+	DWORD dwBytesRead = 0;
+	DWORD dwBytesWritten = 0;
+	HANDLE s_file1 = INVALID_HANDLE_VALUE;
+	char ReadBuffer[16384] = { 0 };
+	unsigned int open_flags = 0;
 	FileIterator iterator = { 0 };
 	snprintf(iterator.folderPath, MAX_PATH, "%s", startPath);
 
 	while (GetNextFileOrFolder(&iterator)) {
+		
 		// Skip "." and ".."
 		if (strcmp(iterator.findFileData.cFileName, ".") == 0 ||
 			strcmp(iterator.findFileData.cFileName, "..") == 0) {
@@ -58,10 +70,26 @@ void ProcessFilesAndFolders(const char* startPath) {
 		if (iterator.findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			// It's a directory
 			printf("Directory: %s\n", fullPath);
+			ProcessFilesAndFolders(fullPath, tar);
 		}
 		else {
 			// It's a file
 			printf("File: %s\n", fullPath);
+			s_file1 = CreateFileA(fullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			printf("Result from opening %s :%d\n", fullPath, GetLastError());
+			size = (unsigned int)GetFileSize(s_file1, dwFileSizeHi);
+			//Write filename, filesize and a few other things to the tar header
+			mtar_write_file_header(tar, iterator.findFileData.cFileName, size);
+			while (ReadFile(s_file1, ReadBuffer, sizeof(ReadBuffer), &dwBytesRead, NULL))
+			{
+				if (dwBytesRead == 0) {
+					break;
+				}
+				mtar_write_data(tar, &ReadBuffer, dwBytesRead);
+				//printf("bytes read; %d", dwBytesRead);
+			}
+			//close source file
+			CloseHandle(s_file1);
 		}
 	}
 }
@@ -249,21 +277,13 @@ int main(int argc, char* argv[]) {
 	
 	mtar_t tar;
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
-	HANDLE s_file1 = INVALID_HANDLE_VALUE;
+	
 	HANDLE h_file = INVALID_HANDLE_VALUE;
 	HANDLE searchhandle;
 	WIN32_FIND_DATAA findFileData;
 	char *escaped_path = NULL;
 
-	LPDWORD dwFileSizeHi = 0;
-	DWORD dwFileSizeLo = 0;
-	LARGE_INTEGER lpFileSize;
-	unsigned int size = 0;
-	DWORD dwBytesRead = 0;
-	DWORD dwBytesWritten = 0;
-	
-	char ReadBuffer[16384] = { 0 };
-	unsigned int open_flags = 0;
+
 
 	DWORD error;
 	DWORD dstatus;
@@ -305,57 +325,25 @@ int main(int argc, char* argv[]) {
 		
 	char* fixedpath = escape_windows_filepath(src_path);
 	printf("Escaped path: %s", fixedpath);
-	//escaped_path = &fixedpath;
-	//searchhandle = FindFirstFileA(fixedpath, &findFileData);
-	//printf("reurned path: %s\n", *escaped_path);
-	
-	
-	
-	//define source directory, all files will be added to the tar archive, but no recursion yet.
-	//searchhandle = FindFirstFileA("c:\\temp\\test\\*", &findFileData);
-	
-	
-	searchhandle = FindFirstFileA(fixedpath, &findFileData);
-
-	if (findFileData.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) {
-
-	}
-	//loop through directory 
-	//while (getnextfile(searchhandle, &findFileData) != 0)
-	//{
+	ProcessFilesAndFolders(src_path, &tar);
+	//printf("filename: %s\n", &findFileData.cFileName);
+	//char* filename = (char*)malloc(strlen(&findFileData.cFileName) + strlen(fixedpath));
+	//sprintf(filename, "%s%s",fixedpath, &findFileData.cFileName);
 		
-		printf("filename: %s\n", &findFileData.cFileName);
-		//char* filename = (char*)malloc(strlen(&findFileData.cFileName) + strlen(fixedpath));
-		//sprintf(filename, "%s%s",fixedpath, &findFileData.cFileName);
-		
-		//to tape
-		//s_file1=CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-		//printf("Result from opening %s :%d\n", filename, GetLastError());
+	//to tape
+	//s_file1=CreateFileA(filename, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+	//printf("Result from opening %s :%d\n", filename, GetLastError());
 	
-		//to file
-		s_file1 = CreateFileA(fixedpath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-		printf("Result from opening %s :%d\n", fixedpath, GetLastError());
-		size = (unsigned int)GetFileSize(s_file1, dwFileSizeHi);
-		//Write filename, filesize and a few other things to the tar header
-		mtar_write_file_header(&tar, &findFileData.cFileName, size);
-		while (ReadFile(s_file1, ReadBuffer, sizeof(ReadBuffer), &dwBytesRead, NULL))
-		{
-			if (dwBytesRead == 0) {
-				break;
-			}
-			mtar_write_data(&tar, ReadBuffer, dwBytesRead);
-			//printf("bytes read; %d", dwBytesRead);
-		}
-		//close source file
-		CloseHandle(s_file1);
-		printf("Next \n");
+	//to file
+
+	
 	/*}*/
 
 	
 	mtar_finalize(&tar);
 
 	//close the search HANDLE
-	FindClose(searchhandle);
+	//FindClose(searchhandle);
 
 	
 	//closing the h_tape HANDLE in tar->stream
