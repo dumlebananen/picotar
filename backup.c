@@ -166,66 +166,7 @@ char* escape_windows_filepath(const char* filepath) {
 	return escaped;
 }
 
-void ListFilesInDirectory(const char* directoryPath) {
-	WIN32_FIND_DATAA findFileData;
-	HANDLE hFind;
-	TCHAR szDir[MAX_PATH];
-	// Create the search path
 
-	StringCchCopy(szDir, MAX_PATH, directoryPath);
-	StringCchCat(szDir, MAX_PATH, TEXT("\\*"));
-
-	// Start searching for files
-	hFind = FindFirstFileA(directoryPath, &findFileData);
-
-	if (hFind == INVALID_HANDLE_VALUE) {
-		printf("Error: Unable to open directory %s. Error code: %d\n", directoryPath, GetLastError());
-		return;
-	}
-
-	printf("Files in directory '%s':\n", directoryPath);
-
-	do {
-		// Skip "." and ".." entries
-		if (strcmp(findFileData.cFileName, ".") != 0 && strcmp(findFileData.cFileName, "..") != 0) {
-			if (findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				printf("[DIR]  %s\n", findFileData.cFileName);
-			}
-			else {
-				printf("[FILE] %s\n", findFileData.cFileName);
-			}
-		}
-	} while (FindNextFileA(hFind, &findFileData) != 0);
-
-	// Check for errors during the FindNextFile loop
-	if (GetLastError() != ERROR_NO_MORE_FILES) {
-		printf("Error occurred while listing files. Error code: %d\n", GetLastError());
-	}
-
-	// Close the handle
-	// Close the handle
-	FindClose(hFind);
-}
-
-int getnextfile(HANDLE *searchhandle, const WIN32_FIND_DATAA *ffd) {
-	//WIN32_FIND_DATAA findFileData;
-	HANDLE hFind = searchhandle;
-	TCHAR szDir[MAX_PATH];
-	int err;
-	
-	// Start searching for files
- 	err=FindNextFileA(searchhandle, ffd);
-
-	if (ffd->dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
-				printf("Only files will be added, skipping directory:  %s\n", ffd->cFileName); //skipping subdirs for now
-				FindNextFileA(searchhandle, ffd); //get next item, doen't handle several subfolders in a row yet.
-		}
-	
-	printf("Adding [FILE] %s\n", ffd->cFileName);
-	
-	return err;
-	
-}
 
 int preptape(HANDLE h_tape) {
 	TAPE_GET_DRIVE_PARAMETERS drive;
