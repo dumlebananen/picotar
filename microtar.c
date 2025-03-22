@@ -158,7 +158,9 @@ const char* mtar_strerror(int err) {
 
 
 static int file_write(mtar_t *tar, const void *data, unsigned size) {
-  //unsigned res = fwrite(data, 1, size, tar->stream);
+    //original code
+    //unsigned res = fwrite(data, 1, size, tar->stream);
+    //changed to win32 WriteFile
     DWORD dwBytesWritten;
     WriteFile(tar->stream, data, size, &dwBytesWritten,0);
     return (dwBytesWritten == size) ? MTAR_ESUCCESS : MTAR_EWRITEFAIL;
@@ -170,9 +172,11 @@ static int file_write(mtar_t *tar, const void *data, unsigned size) {
 //}
 
 static int file_read(mtar_t* tar, void* data, unsigned size) {
-    unsigned res = fread(data, 1, size, tar->stream);
-
-    return (res == size) ? MTAR_ESUCCESS : MTAR_EREADFAIL;
+    //Changed this to WIN32 ReadFile, not tested yet
+    //unsigned res = fread(data, 1, size, tar->stream);
+    DWORD dwBytesRead;
+    ReadFile(tar->stream, data, size, &dwBytesRead, 0);
+    return ( dwBytesRead== size) ? MTAR_ESUCCESS : MTAR_EREADFAIL;
 }
 
 static int file_seek(mtar_t *tar, unsigned offset) {
@@ -181,6 +185,7 @@ static int file_seek(mtar_t *tar, unsigned offset) {
 }
 
 static int file_close(mtar_t *tar) {
+  //Changed this to WIN32 CloseHandle
   CloseHandle(tar->stream);
   return MTAR_ESUCCESS;
 }
@@ -189,7 +194,6 @@ static int file_close(mtar_t *tar) {
 int mtar_open(mtar_t *tar, HANDLE h_file, const char *mode) {
   int err;
   mtar_header_t h;
-  //int filehandle = _open_osfhandle((intptr_t) htar, O_APPEND);
 
   /* Init tar struct and functions */
   memset(tar, 0, sizeof(*tar));
@@ -205,9 +209,7 @@ int mtar_open(mtar_t *tar, HANDLE h_file, const char *mode) {
   if ( strchr(mode, 'a') ) mode = "ab";
   /* Open file */
   tar->stream = h_file;
-  //if (!tar->stream) {
-  //  return MTAR_EOPENFAIL;
-  //}
+
   /* Read first header to check it is valid if mode is `r` */
    if (*mode == 'r') {
     err = mtar_read_header(tar, &h);
