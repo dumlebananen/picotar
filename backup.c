@@ -71,7 +71,7 @@ void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
 	unsigned int size = 0;
 	DWORD dwBytesRead = 0;
 	DWORD dwBytesWritten = 0;
-	HANDLE s_file1 = INVALID_HANDLE_VALUE;
+	HANDLE s_file = INVALID_HANDLE_VALUE;
 	char ReadBuffer[16384] = { 0 };
 	unsigned int open_flags = 0;
 	FileIterator iterator = { 0 };
@@ -99,16 +99,16 @@ void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
 		else {
 			// It's a file
 			printf("File: %s\n", fullPath);
-			s_file1 = CreateFileA(fullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			s_file = CreateFileA(fullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 			printf("Result from opening %s :%d\n", fullPath, GetLastError());
-			size = (unsigned int)GetFileSize(s_file1, dwFileSizeHi);
+			size = (unsigned int)GetFileSize(s_file, dwFileSizeHi);
 			//Write filename, filesize and a few other things to the tar header
 			//mtar_write_file_header(tar, iterator.findFileData.cFileName, size);
 			
 			//testing with unix-style paths in tar header
 			mtar_write_file_header(tar, unixpath, size);
 			
-			while (ReadFile(s_file1, ReadBuffer, sizeof(ReadBuffer), &dwBytesRead, NULL))
+			while (ReadFile(s_file, ReadBuffer, sizeof(ReadBuffer), &dwBytesRead, NULL))
 			{
 				if (dwBytesRead == 0) {
 					break;
@@ -117,7 +117,7 @@ void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
 				//printf("bytes read; %d", dwBytesRead);
 			}
 			//close source file
-			CloseHandle(s_file1);
+			CloseHandle(s_file);
 		}
 
 }
