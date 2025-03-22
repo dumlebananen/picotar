@@ -193,7 +193,8 @@ int preptape(HANDLE h_tape) {
 			printf("Drive compression status: %d\n", drive.Compression);
 			printf("Drive default block size: %d\n", drive.DefaultBlockSize);
 			printf("Drive featureslow: %d\n", CHECK_BIT(drive.FeaturesLow, 2));
-			//setting block size to variable size(0), this was important if i remember correctly, otherwise it would fill out a whole tape block for the remaining bytes of the file.
+			//setting block size to variable size(0), this was important if i remember correctly, 
+			// otherwise it would fill out a whole tape block for the remaining bytes of the file.
 			SetTapeParameters(h_tape, SET_TAPE_MEDIA_INFORMATION, &tsmp);
 			PrepareTape(h_tape, TAPE_LOAD, FALSE);
 			SetTapePosition(h_tape, TAPE_FILEMARKS, 0, 0, 0, TRUE);
