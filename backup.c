@@ -8,6 +8,63 @@
 #undef UNICODE
 #define CHECK_BIT(var,pos) ((var) & (1<<(pos)))
 
+
+typedef struct {
+	HANDLE hFind;
+	WIN32_FIND_DATA findFileData;
+	char folderPath[MAX_PATH];
+	int initialized;
+} FileIterator;
+
+int GetNextFileOrFolder(FileIterator* iterator) {
+	// Initialize the search if it's the first call
+	if (!iterator->initialized) {
+		char searchPath[MAX_PATH];
+		snprintf(searchPath, MAX_PATH, "%s\\*", iterator->folderPath);
+
+		iterator->hFind = FindFirstFile(searchPath, &iterator->findFileData);
+		if (iterator->hFind == INVALID_HANDLE_VALUE) {
+			return 0; // No files found
+		}
+		iterator->initialized = 1;
+		return 1; // Found the first file/folder
+	}
+
+	// Continue to the next file/folder
+	if (FindNextFile(iterator->hFind, &iterator->findFileData)) {
+		return 1; // Found the next file/folder
+	}
+
+	// Clean up if no more files/folders
+	FindClose(iterator->hFind);
+	iterator->hFind = INVALID_HANDLE_VALUE;
+	return 0;
+}
+
+void ProcessFilesAndFolders(const char* startPath) {
+	FileIterator iterator = { 0 };
+	snprintf(iterator.folderPath, MAX_PATH, "%s", startPath);
+
+	while (GetNextFileOrFolder(&iterator)) {
+		// Skip "." and ".."
+		if (strcmp(iterator.findFileData.cFileName, ".") == 0 ||
+			strcmp(iterator.findFileData.cFileName, "..") == 0) {
+			continue;
+		}
+
+		char fullPath[MAX_PATH];
+		snprintf(fullPath, MAX_PATH, "%s\\%s", startPath, iterator.findFileData.cFileName);
+
+		if (iterator.findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+			// It's a directory
+			printf("Directory: %s\n", fullPath);
+		}
+		else {
+			// It's a file
+			printf("File: %s\n", fullPath);
+		}
+	}
+}
 // Function to escape a Windows file path
 char* escape_windows_filepath(const char* filepath) {
 	// Calculate the length of the escaped string
@@ -190,8 +247,6 @@ int checkTapeDrive(HANDLE h_tape) {
 
 int main(int argc, char* argv[]) {
 	
-
-	
 	mtar_t tar;
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE s_file1 = INVALID_HANDLE_VALUE;
@@ -208,19 +263,11 @@ int main(int argc, char* argv[]) {
 	DWORD dwBytesWritten = 0;
 	
 	char ReadBuffer[16384] = { 0 };
-
 	unsigned int open_flags = 0;
-
 
 	DWORD error;
 	DWORD dstatus;
 
-	//Blocksize 0 means variable block size on the tape drive, make sure it supports it.
-	
-	
-	//h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
-	//h_file = CreateFileA("c:\\temp\\testing.tar", GENERIC_READ | GENERIC_WRITE, 0, 0, CREATE_ALWAYS, 0, NULL);
-	
 	const char* command = argv[1];
 	const char* src_path = argv[2];
 	if (strcmp(command, "tapebackup") == 0) {
@@ -267,14 +314,7 @@ int main(int argc, char* argv[]) {
 	//define source directory, all files will be added to the tar archive, but no recursion yet.
 	//searchhandle = FindFirstFileA("c:\\temp\\test\\*", &findFileData);
 	
-	//h_tape = CreateFileA("\\\\.\\Tape0", GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
 	
-	
-
-	
-	
-
-
 	searchhandle = FindFirstFileA(fixedpath, &findFileData);
 
 	if (findFileData.dwFileAttributes == FILE_ATTRIBUTE_DIRECTORY) {
@@ -311,7 +351,7 @@ int main(int argc, char* argv[]) {
 		printf("Next \n");
 	/*}*/
 
-		
+	
 	mtar_finalize(&tar);
 
 	//close the search HANDLE
