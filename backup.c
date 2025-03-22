@@ -38,6 +38,7 @@ char *ConvertToUnixPath(char *winpath, char *unixpath) {
 
 	return unixpath;
 }
+
 int GetNextFileOrFolder(FileIterator* iterator) {
 	// Initialize the search if it's the first call
 	if (!iterator->initialized) {
@@ -165,8 +166,6 @@ char* escape_windows_filepath(const char* filepath) {
 	*dest = '\0'; // Null terminate the escaped string
 	return escaped;
 }
-
-
 
 int preptape(HANDLE h_tape) {
 	TAPE_GET_DRIVE_PARAMETERS drive;
