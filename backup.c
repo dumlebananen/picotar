@@ -64,7 +64,7 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 	return 0;
 }
 
-void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
+int ProcessFilesAndFolders(const char* startPath, mtar_t* tar) {
 	LPDWORD dwFileSizeHi = 0;
 	DWORD dwFileSizeLo = 0;
 	LARGE_INTEGER lpFileSize;
@@ -80,13 +80,13 @@ void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
 	snprintf(iterator.folderPath, MAX_PATH, "%s", startPath);
 
 	while (GetNextFileOrFolder(&iterator)) {
-		
+
 		// Skip "." and ".."
 		if (strcmp(iterator.findFileData.cFileName, ".") == 0 ||
 			strcmp(iterator.findFileData.cFileName, "..") == 0) {
 			continue;
 		}
-		
+
 		snprintf(fullPath, MAX_PATH, "%s\\%s", startPath, iterator.findFileData.cFileName);
 		ConvertToUnixPath(fullPath, unixpath);
 
@@ -104,10 +104,10 @@ void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
 			size = (unsigned int)GetFileSize(s_file, dwFileSizeHi);
 			//Write filename, filesize and a few other things to the tar header
 			//mtar_write_file_header(tar, iterator.findFileData.cFileName, size);
-			
+
 			//testing with unix-style paths in tar header
 			mtar_write_file_header(tar, unixpath, size);
-			
+
 			while (ReadFile(s_file, ReadBuffer, sizeof(ReadBuffer), &dwBytesRead, NULL))
 			{
 				if (dwBytesRead == 0) {
@@ -120,6 +120,7 @@ void ProcessFilesAndFolders(const char* startPath, mtar_t *tar) {
 			CloseHandle(s_file);
 		}
 
+	}
 }
 // Function to escape a Windows file path
 char* escape_windows_filepath(const char* filepath) {
@@ -167,7 +168,7 @@ char* escape_windows_filepath(const char* filepath) {
 	return escaped;
 }
 
-int preptape(HANDLE h_tape) {
+static int preptape(HANDLE h_tape) {
 	TAPE_GET_DRIVE_PARAMETERS drive;
 	TAPE_GET_MEDIA_PARAMETERS media;
 	int have_drive_info = 0;
@@ -205,8 +206,9 @@ int preptape(HANDLE h_tape) {
 		}
 
 
-}
+	}
 
+}
 int checkTapeDrive(HANDLE h_tape) {
 	/* Check for errors */
 	if (h_tape == INVALID_HANDLE_VALUE)
