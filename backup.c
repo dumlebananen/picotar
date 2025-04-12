@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <strsafe.h>
 #include <wchar.h>
+#include <Shlwapi.h>
 
 #define _CRT_SECURE_NO_WARNINGS
 //#undef _UNICODE
@@ -18,11 +19,17 @@ typedef struct {
 	int initialized;
 } FileIterator;
 
+wchar_t initialpath[MAX_PATH];
+
 wchar_t* ConvertToUnixPath(wchar_t* winpath, wchar_t* unixpath) {
+	// Convert Windows path to Unix path
+	// Allocate memory for the Unix path
+	
+
 	if (winpath == NULL) {
 		return NULL; // Handle null input
 	}
-	size_t length = strlen(winpath);
+	size_t length = wcslen(winpath);
 
 
 	// Convert backslashes to forward slashes
@@ -43,7 +50,8 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 	// Initialize the search if it's the first call
 	if (!iterator->initialized) {
 		wchar_t searchPath[MAX_PATH];
-		swprintf(searchPath, MAX_PATH, "%s\\*", iterator->folderPath);
+		swprintf(searchPath, MAX_PATH, L"%s\\*", iterator->folderPath);
+		//printf("searchpath: %s\n", searchPath);
 
 		iterator->hFind = FindFirstFile(searchPath, &iterator->findFileData);
 		if (iterator->hFind == INVALID_HANDLE_VALUE) {
@@ -64,49 +72,60 @@ int GetNextFileOrFolder(FileIterator* iterator) {
 	return 0;
 }
 
-int ProcessFilesAndFolders(const wchar_t* startPath, mtar_t* tar) {
+void ProcessFilesAndFolders(const wchar_t* startPath, mtar_t* tar) {
 	LPDWORD dwFileSizeHi = 0;
 	DWORD dwFileSizeLo = 0;
-	LARGE_INTEGER lpFileSize;
+	//LARGE_INTEGER lpFileSize;
 	unsigned int size = 0;
 	DWORD dwBytesRead = 0;
 	DWORD dwBytesWritten = 0;
 	HANDLE s_file = INVALID_HANDLE_VALUE;
-	char ReadBuffer[16384] = { 0 };
+	char ReadBuffer[4096] = { 0 };
 	unsigned int open_flags = 0;
 	FileIterator iterator = { 0 };
 	wchar_t unixpath[MAX_PATH];
 	wchar_t fullPath[MAX_PATH];
-	swprintf(iterator.folderPath, MAX_PATH, "%s", startPath);
+	char ucharpath[MAX_PATH];
+	wchar_t relpath[MAX_PATH];
+	swprintf(iterator.folderPath, MAX_PATH, L"%s", startPath);
+	char relpathA[MAX_PATH];
+	char canpathA[MAX_PATH];
+	wchar_t canpath[MAX_PATH];	
+	
 
 	while (GetNextFileOrFolder(&iterator)) {
 
 		// Skip "." and ".."
-		if (strcmp(iterator.findFileData.cFileName, ".") == 0 ||
-			strcmp(iterator.findFileData.cFileName, "..") == 0) {
+		if (wcscmp(iterator.findFileData.cFileName, L".") == 0 || wcscmp(iterator.findFileData.cFileName, L"..") == 0) {
 			continue;
 		}
 
-		swprintf(fullPath, MAX_PATH, "%s\\%s", startPath, iterator.findFileData.cFileName);
+		swprintf(fullPath, MAX_PATH, L"%s\\%s", startPath, iterator.findFileData.cFileName);
 		ConvertToUnixPath(fullPath, unixpath);
+		PathRelativePathToW(relpath, initialpath, FILE_ATTRIBUTE_NORMAL, fullPath, FILE_ATTRIBUTE_NORMAL);
+		PathCanonicalizeW(canpath, relpath);
+		wcstombs(canpathA, canpath, MAX_PATH);
 
 		if (iterator.findFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
 			// It's a directory
-			printf("Directory: %s\n", fullPath);
+			_tprintf(TEXT("Directory: %s\n"), fullPath);
 			//mtar_write_file_header(tar, unixpath, 0);
 			ProcessFilesAndFolders(fullPath, tar);
+			//wcstombs(ucharpath, iterator.findFileData.cFileName, MAX_PATH);
+			
+			//Write filename, filesize and a few other things to the tar header
+			mtar_write_dir_header(tar, canpathA);
 		}
 		else {
 			// It's a file
-			printf("File: %s\n", fullPath);
-			s_file = CreateFileA(fullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
-			printf("Result from opening %s :%d\n", fullPath, GetLastError());
+			_tprintf(TEXT("File: %s\n"), fullPath);
+			s_file = CreateFile(fullPath, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+			_tprintf(TEXT("Result from opening %s :%d\n"), fullPath, GetLastError());
 			size = (unsigned int)GetFileSize(s_file, dwFileSizeHi);
-			//Write filename, filesize and a few other things to the tar header
-			//mtar_write_file_header(tar, iterator.findFileData.cFileName, size);
-
-			//testing with unix-style paths in tar header
-			mtar_write_file_header(tar, unixpath, size);
+			wcstombs(ucharpath, iterator.findFileData.cFileName, MAX_PATH);
+			
+			
+			mtar_write_file_header(tar, canpathA, size);
 
 			while (ReadFile(s_file, ReadBuffer, sizeof(ReadBuffer), &dwBytesRead, NULL))
 			{
@@ -168,7 +187,7 @@ wchar_t* escape_windows_filepath(const wchar_t* filepath) {
 	return escaped;
 }
 
-int preptape(HANDLE h_tape) {
+void preptape(HANDLE h_tape) {
 	TAPE_GET_DRIVE_PARAMETERS drive;
 	TAPE_GET_MEDIA_PARAMETERS media;
 	int have_drive_info = 0;
@@ -242,13 +261,13 @@ int checkTapeDrive(HANDLE h_tape) {
 
 }
 
-int _tmain(int argc, TCHAR **argv) {
+int _tmain(int argc, TCHAR *argv[]) {
 
 	mtar_t tar;
 	HANDLE h_tape = INVALID_HANDLE_VALUE;
 	HANDLE h_file = INVALID_HANDLE_VALUE;
-	HANDLE searchhandle;
-	WIN32_FIND_DATA findFileData;
+	//HANDLE searchhandle;
+	//WIN32_FIND_DATA findFileData;
 	wchar_t* escaped_path = NULL;
 	DWORD error;
 	DWORD dstatus;
@@ -257,7 +276,7 @@ int _tmain(int argc, TCHAR **argv) {
 	const wchar_t* src_path = argv[2];
 	if (wcscmp(command, L"tapebackup") == 0) {
 		if (argc != 3) {
-			printf("Usage: %s tapebackup <source_file>\n", argv[0]);
+			_tprintf(TEXT("Usage: %s tapebackup <source_file>\n"), argv[0]);
 
 			return 1;
 		}
@@ -278,7 +297,7 @@ int _tmain(int argc, TCHAR **argv) {
 
 	if (wcscmp(command, L"backup") == 0) {
 		if (argc != 4) {
-			printf("Usage: %s backup <source_file> <destination_tar>\n", argv[0]);
+			_tprintf(TEXT("Usage: %ls backup <source_file> <destination_tar>\n"), argv[0]);
 			return 1;
 		}
 		else {
@@ -289,7 +308,8 @@ int _tmain(int argc, TCHAR **argv) {
 	}
 
 	wchar_t* fixedpath = escape_windows_filepath(src_path);
-	printf("Escaped path: %s", fixedpath);
+	//_tprintf(TEXT("Escaped path: %s", fixedpath));
+	wcscpy(initialpath, src_path);
 	ProcessFilesAndFolders(src_path, &tar);
 
 	mtar_finalize(&tar);
